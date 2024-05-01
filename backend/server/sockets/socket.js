@@ -39,12 +39,14 @@ io.on('connection', (client) => {
     });   
 
     // Emitir el mensaje a todos
-    client.on('crearMensaje', (data) =>  {
+    client.on('crearMensaje', (data, callback ) =>  {
 
         let persona = usuarios.getPersona( client.id );
 
         let mensaje = crearMensaje( persona.nombre, data.mensaje );
         client.broadcast.emit( 'crearMensaje', mensaje );
+
+        callback(mensaje);
 
     });
 

@@ -17,7 +17,11 @@ var usuario = {
 // Creamos la conexion con el servidor y traemos los usuarios conectados
 socket.on('connect', function() {
     socket.emit( 'entrarChat',  usuario, function( resp ){ 
+        
         console.log( 'Usuarios conectados', resp);
+
+        // Renderizamos los usuarios conectados
+        renderizarUsuarios(resp);
      });
 });
 
@@ -27,22 +31,18 @@ socket.on('disconnect', function() {
 });
 
 
-// Enviar información
-// socket.emit('crearMensaje', {
-//     usuario: 'Fernando',
-//     mensaje: 'Hola Mundo'
-// }, function(resp) {
-//     console.log('respuesta server: ', resp);
-// });
-
-// Escuchar Cuando se envia un mensaje
+// Escuchar Cuando se envia un mensaje a todas las personas
 socket.on('crearMensaje', function(mensaje) {
     console.log('Servidor:', mensaje);
+    renderizarMensajes( mensaje, false );
+    scrollBottom();
 });
 
 // Escuchar cambios de usuarios (cuando se conecta o se desconecta )
-socket.on( 'listaPersona', function(mensaje) {
-    console.log(mensaje);
+socket.on( 'listaPersona', function(personas) {
+    console.log( "mensaje 49 => ",  personas);
+    // Renderizamos los usuarios conectados
+    renderizarUsuarios(personas);
 })
 
 // Mensajes privados
