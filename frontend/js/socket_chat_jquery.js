@@ -3,6 +3,8 @@
 var params   =   new URLSearchParams( window.location.search );
 
 var nombre = params.get('nombre');
+var idUsuario = '';
+var from,to, mensajeAutomatico;
 
 // Referencias del html
 var divUsuarios = $('#divUsuarios');
@@ -10,12 +12,17 @@ var formEnviar = $('#formEnviar');
 var txtMensaje = $('#txtMensaje');
 var divChatbox = $('#divChatbox');
 
+var datos_convertir     =   [{ "valor" : "", "origen":"" }];
+var consecutivo         =   1;
+
+var mensajeRecibido =   ''
 
 // Funciones de renderizado
 function renderizarUsuarios( personas ){
 
-    var html = '';
-
+    idUsuario   =   personas[0].id;
+    var html    = '';
+    
     html += '<li>';
     html += '    <a href="javascript:void(0)" class="active"> Conversor de Divisas</span></a>';
     html += '</li>';
@@ -38,21 +45,22 @@ divUsuarios.on('click', 'a', function(){
     }    
 });
 
-
 // Eventos cuando se envia el mensaje
 formEnviar.on('submit', function(e){
 
     // Evitamos que se recargue la pagina al enviar el mensaje
     e.preventDefault();
 
-    if( txtMensaje.val().trim().length === 0  ){
+    mensajeRecibido = txtMensaje.val();
+
+    if( mensajeRecibido.trim().length === 0  ){
         return;
     }
 
-    // Enviar el mensaje
-    socket.emit('crearMensaje', {
+    // Mensaje que envia el usuario
+    socket.emit('mensajePrivado', {
         nombre  :     nombre,
-        mensaje :     txtMensaje.val()
+        mensaje :     mensajeRecibido
     }, function( mensaje ) {
 
         // limpiamos el input
@@ -61,6 +69,8 @@ formEnviar.on('submit', function(e){
         scrollBottom();
     });
 
+    // Validamos los mensajes de entrada
+    validadoresMensajes()
 
 });
 
@@ -75,8 +85,6 @@ function renderizarMensajes( mensaje, yo ){
     if ( mensaje.nombre === 'admin' ){
         adminClass = 'danger';
     }
-
-    console.log("mensaje.nombre ", mensaje.nombre);
 
     if ( yo ){
 
@@ -123,4 +131,124 @@ function scrollBottom() {
     if (clientHeight + scrollTop + newMessageHeight + lastMessageHeight >= scrollHeight) {
         divChatbox.scrollTop(scrollHeight);
     }
+}
+
+function respuestasAutomaticas( mensaje ){
+
+    socket.emit('mensajePrivado', {
+        nombre  :     'Administrador',
+        mensaje :     mensaje
+    }, function( mensaje ) {
+
+        // limpiamos el input        
+        renderizarMensajes( mensaje, false )
+        scrollBottom();
+        
+    });
+
+}
+
+function validadoresMensajes(){
+
+    if (consecutivo === 1){
+
+        if ($.isNumeric(mensajeRecibido)){
+            datos_convertir[0].valor = mensajeRecibido;
+            mensajeAutomatico =   'Por favor ingresa: <br> 1. Para convertir de Dolares a Pesos <br> 2. Para convertir de Pesos a Dolares'
+            
+        }else{
+            mensajeAutomatico   = 'Debes ingresar un valor numerico <br> Por favor ingresa el monto a convertir';
+            consecutivo         =  0;
+        }
+
+        respuestasAutomaticas( mensajeAutomatico )
+
+    }else{
+
+        var continuaProceso = true;
+        
+        if(mensajeRecibido === 1 || mensajeRecibido === '1'){
+            from    =   'USD';
+            to      =   'COP';            
+        }else if(mensajeRecibido === 2 || mensajeRecibido === '2'){
+            from  =   'COP';
+            to    =   'USD';
+        }else{
+            continuaProceso = false;
+        }
+
+        if (continuaProceso){
+
+            datos_convertir[0].origen = from;
+    
+            mensajeAutomatico =   'Un momento por favor....'
+            respuestasAutomaticas( mensajeAutomatico )
+    
+            consecutivo = 0;
+    
+            // Consumimos API de conversion
+            var settings = {
+                "url": "https://api.apilayer.com/exchangerates_data/convert?to="+to+"&from="+from+"&amount="+datos_convertir[0].valor,
+                "method": "GET",
+                "timeout": 0,
+                "headers": {
+                  "apikey": "SO9nJv9lIR8TsGFkIE6lH93uQdbr7z43"
+                },
+              };
+              
+              $.ajax(settings).done(function (response, textStatus, xhr) {
+                
+                if (response.success === true){
+    
+                    // console.log("response = ", response);
+                    // console.log("datos_convertir == ", datos_convertir);
+                    
+                    mensajeAutomatico = ''+datos_convertir[0].valor+' '+from+' equivalen a '+response.result+' '+to+'<br> Por favor ingresa el nuevo monto a convertir sin puntos ni caracteres especiales';                
+                    respuestasAutomaticas( mensajeAutomatico );
+
+                    // Almacenamos el registro en la bd
+                    almacenarBD(  datos_convertir[0].valor,  response.result  );
+    
+                }else{
+                    mensajeAutomatico = 'Se presento un inconveniente al convertir el monto ingresado, por favor intente nuevamente'
+                }
+    
+                }).fail(function(xhr, textStatus, errorThrown) {
+                // Se produjo un error en la solicitud
+                console.error("Error en la solicitud:", errorThrown);
+                mensajeAutomatico = 'Se produjo un error al procesar la solicitud, por favor inténtelo nuevamente';
+                respuestasAutomaticas( mensajeAutomatico )
+                });        
+        }else{
+            mensajeAutomatico = 'Por favor ingresa una opcion valida <br> 1. Para convertir de Dolares a Pesos <br> 2. Para convertir de Pesos a Dolares';
+            respuestasAutomaticas( mensajeAutomatico )
+            consecutivo = 1;
+        }
+    }    
+    consecutivo += 1;
+}
+
+function almacenarBD( valorConsultado, valorConvertido ){
+
+    var settings = {
+        "url": "http://localhost:3000/api/almacenarConversion",
+        "method": "POST",
+        "timeout": 0,
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "data": JSON.stringify({
+          idUsuario,
+          usuario : usuario.nombre,
+          valorConsultado,
+          from,
+          valorConvertido,
+          to
+        }),
+      };
+      
+      $.ajax(settings).done(function (response) {
+        console.log(response);
+      });
+
 }

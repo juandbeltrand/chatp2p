@@ -31,10 +31,18 @@ io.on('connection', (client) => {
             let personas = usuarios.agregarPersona( client.id, usuario.nombre);
 
             // Mensaje para mostrar las personas conectadas
-            client.broadcast.emit( 'listaPersona', usuarios.getPersonas() );
+            // client.broadcast.emit( 'listaPersona', usuarios.getPersonas() );
+            // client.broadcast.emit( 'listaPersona', usuarios.getPersona(client.id) );
+
+            var conectado   =   [];
+
+            conectado.push(personas.filter( persona => persona.id === client.id)[0]);
+
             
-            // Regresamos el objeto
-            callback( personas );
+            // Regresamos solamente la persona que esta en este socket
+            // callback( personas );
+            callback( conectado );
+            
         } 
     });   
 
@@ -46,7 +54,7 @@ io.on('connection', (client) => {
         let mensaje = crearMensaje( persona.nombre, data.mensaje );
         client.broadcast.emit( 'crearMensaje', mensaje );
 
-        callback(mensaje);
+        callback(mensaje)
 
     });
 
@@ -57,18 +65,23 @@ io.on('connection', (client) => {
         let personaBorrada = usuarios.borrarPersona( client.id )
 
         // Se informa a todos los usuarios
-        client.broadcast.emit( 'crearMensaje', crearMensaje( 'admin', `${ personaBorrada.nombre } se desconecto `)  );
+        // client.broadcast.emit( 'crearMensaje', crearMensaje( 'admin', `${ personaBorrada.nombre } se desconecto `)  );
 
         // Mensaje para mostrar las personas conectadas
-        client.broadcast.emit( 'listaPersona', usuarios.getPersonas() );
+        // client.broadcast.emit( 'listaPersona', usuarios.getPersonas() );
 
     }); 
 
     // Mensaje privado
-    client.on('mensajePrivado', data => {
+    client.on('mensajePrivado', (data, callback) => {
 
         let persona = usuarios.getPersona( client.id );
-        client.broadcast.to(data.para).emit('mensajePrivado', crearMensaje( persona.nombre, data.mensaje ) );
+
+        let mensaje = crearMensaje( data.nombre, data.mensaje );
+
+        client.broadcast.to(  client.id  ).emit( 'mensajePrivado', mensaje );
+
+        callback(mensaje)
 
     })
 
